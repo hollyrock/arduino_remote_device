@@ -20,90 +20,114 @@
 #include <XBee.h>
 #include <SoftwareSerial.h>
 
-//Define SoftwareSerial TX/RX pins
-//Connect Arduino pin 8 to TX of usb-serial device
-uint8_t ssRX = 8;
-//Connect Arduino pin 9 to RX of usb-serial device
-uint8_t ssTX = 9;
+/*
+This example is for Series 1 XBee
+Sends a TX16 or TX64 request with the value of analogRead(pin5) and checks the status response for success
+Note: In my testing it took about 15 seconds for the XBee to start reporting success, so I've added a startup delay
+*/
 
-SoftwareSerial nss(ssRX, ssTX);
+SoftwareSerial altSerial(2, 3);
 XBee xbee = XBee();
 
-Rx16IoSampleResponse ioSample = Rx16IoSampleResponse();
-// 64-bit response is same except API ID equals RX_64_IO_RESPONSE and returns a 64-bit address
+// allocate two bytes for to hold a 10-bit analog reading
+uint8_t payload[] = {0, 0};
+unsigned long start = millis();
+
+// with Series 1 you can use either 16-bit or 64-bit addressing
+
+// 16-bit addressing: Enter address of remote XBee, typically the coordinator
+Tx16Request tx = Tx16Request(0x1234, payload, sizeof(payload));
+
+// create reusable response objects for responses we expect to handle 
+Rx16Response rx16 = Rx16Response();
+Rx64Response rx64 = Rx64Response();
+
+// 64-bit addressing: This is the SH + SL address of remote XBee
+//XBeeAddress64 addr64 = XBeeAddress64(0x0013a200, 0x4008b490);
+// unless you have MY on the receiving radio set to FFFF, this will be received as a RX16 packet
+//Tx64Request tx = Tx64Request(addr64, payload, sizeof(payload));
+
+TxStatusResponse txStatus = TxStatusResponse();
+
+int pin5 = 0;
+int statusLed = 11;
+int errorLed = 12;
+
+//uint8_t option = 0;
+uint8_t data = 0;
+
+void flashLed(int pin, int times, int wait) {
+    
+    for (int i = 0; i < times; i++) {
+      digitalWrite(pin, HIGH);
+      delay(wait);
+      digitalWrite(pin, LOW);
+      if (i + 1 < times) delay(wait);
+    }
+}
 
 void setup() {
-
-    Serial.begin(57600); // for Debug
-    xbee.setSerial(Serial);
-    nss.begin(57600); // Start soft serial
-
+  pinMode(statusLed, OUTPUT);
+  pinMode(errorLed, OUTPUT);
+  Serial.begin(57600); // for Debug
+  altSerial.begin(57600);
+  xbee.setSerial(altSerial);
 }
 
 void loop() {
+  xbee.readPacket();
+  if (xbee.getResponse().isAvailable()) {
+      Serial.println("I got something!");
     
-    xbee.readPacket(); //Attempt to read a packet
-    
-    if (xbee.getResponse().isAvailable()) {
-        Serial.println("I got something!");
-        
-        if (xbee.getResponse().getApiId() == RX_16_RESPONSE) {
-            xbee.getResponse().getRx16IoSampleResponse(ioSample);
-            //flashLed(statusLed, 3, 10);
-            nss.print("Received I/O Sample from: ");
-            nss.println(ioSample.getRemoteAddress16(), HEX);
-            
-            nss.print("Sample size is ");
-            nss.println(ioSample.getSampleSize(), DEC);
-            
-            if (ioSample.containsAnalog()) {
-                nss.println("Sample contains analog data");
-            }
-            
-            if (ioSample.containsDigital()) {
-                nss.println("Sample contains digital data");
-            }
-            
-            for (int k = 0; k < ioSample.getSampleSize(); k++) {
-                nss.print("Sample ");
-                nss.print(k+1, DEC);
-                nss.println(":");
-                
-                for (int i = 0; i <= 5; i++) {
-                    if (ioSample.isAnalogEnabled(i)) {
-                        nss.print("Analog (AI");
-                        nss.print(i, DEC);
-                        nss.print(") is ");
-                        nss.println(ioSample.getAnalog(i, k));
-                    }
-                }
-                
-                for (int i = 0; i <= 8; i++) {
-                    if (ioSample.isDigitalEnabled(i)) {
-                        nss.print("Digital (DI");
-                        nss.print(i, DEC);
-                        nss.print(") is ");
-                        nss.println(ioSample.isDigitalOn(i, k));
-                    }
-                }
-            }
-        }else{
-            nss.print("Expected I/O Sample, but got ");
-            nss.print(xbee.getResponse().getApiId(), HEX);
-        }
-    }else if (xbee.getResponse().isError()) {
-        nss.print("Error reading packet. Error code: ");
-        nss.println(xbee.getResponse().getErrorCode());
-    }
-}
-
-
-// Flash LEDs
-void flashLed(int pin, int times, int wait) {
-    for (int i = 0; i < times; i++) {
-        digitalWrite(pin, HIGH);
-        delay(wait);
-        digitalWrite(pin, LOW);
-        if (i + 1 < times) delay(wait);
-    }
+      if (xbee.getResponse().getApiId() == RX_16_RESPONSE || xbee.getResponse().getApiId() == RX_64_RESPONSE) {
+          
+          Serial.println(".. and also ID!");
+          flashLed(statusLed, 3, 10);
+      
+          if (xbee.getResponse().getApiId() == RX_16_RESPONSE) {
+              xbee.getResponse().getRx16Response(rx16);
+              //option = rx16.getOption();
+              data = rx16.getData(0);
+          }else{
+              xbee.getResponse().getRx64Response(rx64);
+              //option = rx64.getOption();
+              data = rx64.getData(0);
+          }
+      
+          Serial.println("So, I will send some charactors to XBee having addr:0x1234.");
+          
+          if (millis() - start > 15000){
+              pin5 = analogRead(5);
+              payload[0] = pin5 >> 8 & 0xff;
+              payload[1] = pin5 & 0xff;
+              xbee.send(tx);
+          }
+      
+          // after sending a tx request, we expect a status response
+          // wait up to 5 seconds for the status response
+          if (xbee.readPacket(5000)) {
+              Serial.println("Wow! I've got a response!");
+              // should be a znet tx status            	
+    	      if (xbee.getResponse().getApiId() == TX_STATUS_RESPONSE) {
+    	          xbee.getResponse().getZBTxStatusResponse(txStatus);
+                  
+                  // get the delivery status, the fifth byte
+                  if (txStatus.getStatus() == SUCCESS) {
+                      flashLed(statusLed, 5, 50);
+                      Serial.println("Success! Congraturations!");
+                  } else {
+                      Serial.println("a,oh we're in trouble..");
+                      flashLed(errorLed, 3, 500);
+                  }
+              }
+              
+          } else if (xbee.getResponse().isError()) {
+              Serial.println("Wow! I've got an Error response!");
+          } else {
+              // local XBee did not provide a timely TX Status Response.  Radio is not configured properly or connected
+              flashLed(errorLed, 2, 50);
+          }
+      }
+   delay(1000);
+  }
 }
