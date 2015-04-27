@@ -1,7 +1,7 @@
 /**
  * Copyright (c) 2009 Andrew Rapp. All rights reserved.
  *
- * This file is part of XBee-Arduino.
+ * This file is modified from part of XBee-Arduino.
  *
  * XBee-Arduino is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +21,12 @@
 #include <SoftwareSerial.h>
 
 /*
-This example is for Series 1 XBee
-Sends a TX16 or TX64 request with the value of analogRead(pin5) and checks the status response for success
-Note: In my testing it took about 15 seconds for the XBee to start reporting success, so I've added a startup delay
-     XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
-     XBee's DIN (RX) is connected to pin 3 (Arduino's Software TX)
+    This example is for Series 1 XBee
+    Sends a TX16 or TX64 request with the value of analogRead(pin5) and checks the status response for success
+    
+    Note: In my testing it took about 15 seconds for the XBee to start reporting success, so I've added a startup delay
+    XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
+    XBee's DIN (RX) is connected to pin 3 (Arduino's Software TX)
 */
 
 SoftwareSerial altSerial(2, 3);
@@ -86,20 +87,31 @@ void loop() {
     
       if (xbee.getResponse().getApiId() == RX_16_RESPONSE || xbee.getResponse().getApiId() == RX_64_RESPONSE) {
 
-          xbee.getResponse().getRx16IoSampleResponse(ioSample);
+        //Get the packet  
+        xbee.getResponse().getRx16IoSampleResponse(ioSample);
+        
+        Serial.println("Frame from valid ID ==========");
+        Serial.print("ID: ");
+        Serial.println(ioSample.getRemoteAddress16(), HEX);
+        Serial.print("Sample Size:");
+        Serial.println(ioSample.getRemoteAddress16(), DEC);
+        Serial.print("Data Length:");
+        Serial.println(ioSample.getDataLength(), DEC);
+        Serial.print("Frame Data:");
+        for (int i=0; i<ioSample.getDataLength(); i++){
+          Serial.write(' ');
+          if(iscntrl(ioSample.getData()[i]))
+            Serial.write('.');
+          else
+            Serial.write(ioSample.getData()[i]);
+          Serial.write(' ');
+        }
+        Serial.println();
+        Serial.println("==============================");
           
-          Serial.println("Frame from valid ID ==========");
-          Serial.print("ID: ");
-          Serial.println(ioSample.getRemoteAddress16(), HEX);
-          Serial.print("Sample Size:");
-          Serial.println(ioSample.getRemoteAddress16(), DEC);
-          Serial.print("Data Length:");
-          Serial.println(ioSample.getDataLength(), DEC);
-          Serial.println("==============================");
-          
-          flashLed(statusLed, 3, 10);
-      
-          if (xbee.getResponse().getApiId() == RX_16_RESPONSE) {
+        flashLed(statusLed, 3, 10);
+        
+        if (xbee.getResponse().getApiId() == RX_16_RESPONSE) {
               xbee.getResponse().getRx16Response(rx16);
               //option = rx16.getOption();
               data = rx16.getData(0);
