@@ -24,10 +24,14 @@
 This example is for Series 1 XBee
 Sends a TX16 or TX64 request with the value of analogRead(pin5) and checks the status response for success
 Note: In my testing it took about 15 seconds for the XBee to start reporting success, so I've added a startup delay
+     XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
+     XBee's DIN (RX) is connected to pin 3 (Arduino's Software TX)
 */
 
 SoftwareSerial altSerial(2, 3);
 XBee xbee = XBee();
+
+Rx16IoSampleResponse ioSample = Rx16IoSampleResponse(); 
 
 // allocate two bytes for to hold a 10-bit analog reading
 uint8_t payload[] = {0, 0};
@@ -52,6 +56,7 @@ TxStatusResponse txStatus = TxStatusResponse();
 int pin5 = 0;
 int statusLed = 11;
 int errorLed = 12;
+int serial_speed = 19200;
 
 //uint8_t option = 0;
 uint8_t data = 0;
@@ -69,32 +74,49 @@ void flashLed(int pin, int times, int wait) {
 void setup() {
   pinMode(statusLed, OUTPUT);
   pinMode(errorLed, OUTPUT);
-  Serial.begin(57600); // for Debug
-  altSerial.begin(57600);
+  Serial.begin(serial_speed); // for Debug
+  altSerial.begin(serial_speed);
   xbee.setSerial(altSerial);
 }
 
 void loop() {
   xbee.readPacket();
   if (xbee.getResponse().isAvailable()) {
-      Serial.println("I got something!");
+      Serial.println("I got something..");
     
       if (xbee.getResponse().getApiId() == RX_16_RESPONSE || xbee.getResponse().getApiId() == RX_64_RESPONSE) {
+
+          xbee.getResponse().getRx16IoSampleResponse(ioSample);
           
-          Serial.println(".. and also ID!");
+          Serial.println("Frame from valid ID ==========");
+          Serial.print("ID: ");
+          Serial.println(ioSample.getRemoteAddress16(), HEX);
+          Serial.print("Sample Size:");
+          Serial.println(ioSample.getRemoteAddress16(), DEC);
+          Serial.print("Data Length:");
+          Serial.println(ioSample.getDataLength(), DEC);
+          Serial.println("==============================");
+          
           flashLed(statusLed, 3, 10);
       
           if (xbee.getResponse().getApiId() == RX_16_RESPONSE) {
               xbee.getResponse().getRx16Response(rx16);
               //option = rx16.getOption();
               data = rx16.getData(0);
+              Serial.print("Data captured by rx16.getData: ");
+              Serial.println(data,HEX);
+              
           }else{
               xbee.getResponse().getRx64Response(rx64);
               //option = rx64.getOption();
               data = rx64.getData(0);
+              Serial.print("Data captured by rx64.getData: ");
+              Serial.println(data,HEX);
           }
       
-          Serial.println("So, I will send some charactors to XBee having addr:0x1234.");
+          Serial.print("So, I will send some charactors to XBee having addr: ");
+          Serial.println(ioSample.getRemoteAddress16(),HEX);
+          
           
           if (millis() - start > 15000){
               pin5 = analogRead(5);
