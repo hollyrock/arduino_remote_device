@@ -1,21 +1,11 @@
-/**
- * Copyright (c) 2009 Andrew Rapp. All rights reserved.
- *
- * This file is modified from part of XBee-Arduino.
- *
- * XBee-Arduino is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * XBee-Arduino is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with XBee-Arduino.  If not, see <http://www.gnu.org/licenses/>.
- */
+/*
+  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  Remote Sense Device using XBee
+  
+  Created 30 May 2015
+  by hollyRock
+  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
  
 #include <XBee.h>
 #include <SoftwareSerial.h>
@@ -28,38 +18,52 @@
 SoftwareSerial altSerial(2, 3);
 XBee xbee = XBee();
 
-Rx16IoSampleResponse ioSample = Rx16IoSampleResponse(); 
+uint8_t payload[] = {0, 0}; // allocate two bytes for to hold a 10-bit analog reading
+// AT Command for retreving XBee configurations on Arduino
+//uint8_t arryCmd[] = {'M', 'Y'};
+uint8_t ID[] = {'I','D'}; //Personal Area Network ID ...OK
+uint8_t MY[] = {'M','Y'}; //16-bit Address           ...OK
+uint8_t DB[] = {'D','B'}; //Received Signal Strength ...NG
+uint8_t PP[] = {'P','P'}; //Peak Power               ...NG
+uint8_t BD[] = {'B','D'}; //Interface Data Rate      ...NG
+uint8_t VP[] = {'V','+'}; //Voltage Supply Monitoring
+uint8_t TP[] = {'T','P'}; //Module Temperature
+uint8_t VR[] = {'V','R'}; //Firmware Version         ...OK
+uint8_t FR[] = {'F','R'}; //Software Reset           ...OK
 
-// allocate two bytes for to hold a 10-bit analog reading
-uint8_t payload[] = {0, 0};
-unsigned long start = millis();
-
-// Coordinator Address: 0x1234
-Tx16Request tx = Tx16Request(0x1234, payload, sizeof(payload));
-Rx16Response rx16 = Rx16Response();
+Tx16Request tx = Tx16Request(0x1234, payload, sizeof(payload)); // Coordinator Address: 0x1234
 TxStatusResponse txStatus = TxStatusResponse();
+
+Rx16IoSampleResponse ioSample = Rx16IoSampleResponse(); 
+Rx16Response rx16 = Rx16Response();
+
+AtCommandRequest atRequest = AtCommandRequest();
+AtCommandResponse atResponse = AtCommandResponse();
 
 /*
     Configuration Parameters
 */
+unsigned long start = millis();
+int anaSense = 5;
 int pin5 = 0;
 int statusLed = 11;
 int errorLed = 12;
 int serial_speed = 19200;
-
-// AT Command for retreving XBee configurations on Arduino
-//cahr* arryCmd[] = {"ID", "MY", "DB", "PP", "BD", "V+", "TP", "VR", "FR"};
-uint8_t arryCmd[] = {'M', 'Y'};
-
 //uint8_t option = 0;
 uint8_t data = 0;
 
 void setup() {
+  
   pinMode(statusLed, OUTPUT);
   pinMode(errorLed, OUTPUT);
+  
   Serial.begin(serial_speed);     // Debug
   altSerial.begin(serial_speed);  // Xbee
   xbee.setSerial(altSerial);
+  
+  debugPrint(ioSample);       // Print frame content to serial monitor
+  getParam();                 // Obtain self configration parameters
+
 }
 
 void flashLed(int pin, int times, int wait) {
@@ -73,30 +77,39 @@ void flashLed(int pin, int times, int wait) {
 }
 
 void getParam(){
-  if (sendATCommand()==0)
-    Serial.println("Get all parameters.");
-  else
-    Serial.println("Fail to get all parameters. Debug me.");
+  atRequest.setCommand(ID);
+  sendATCommand();
+  atRequest.setCommand(MY);
+  sendATCommand();
+//  atRequest.setCommand(DB);
+//  sendATCommand();
+//  atRequest.setCommand(PP);
+//  sendATCommand();
+//  atRequest.setCommand(BD);
+//  sendATCommand();
+//  atRequest.setCommand(VP);
+//  sendATCommand();
+//  atRequest.setCommand(TP);
+//  sendATCommand();
+  atRequest.setCommand(VR);
+  sendATCommand();
+//  atRequest.setCommand(FR);
+//  sendATCommand();
 }
 
 int sendATCommand(){
 
   int err = 0;
-  AtCommandRequest atRequest = AtCommandRequest(arryCmd);
-  AtCommandResponse atResponse = AtCommandResponse();
   xbee.send(atRequest); //send the command
       
   if (xbee.readPacket(5000)) {
-    
     if (xbee.getResponse().getApiId() == AT_COMMAND_RESPONSE) {
       xbee.getResponse().getAtCommandResponse(atResponse);
-      
       if (atResponse.isOk()) {
         Serial.print("Command [");
         Serial.write(atResponse.getCommand()[0]);
         Serial.write(atResponse.getCommand()[1]);
-        Serial.println("] was successful!");
-        
+        Serial.println("] was successful.");
         if (atResponse.getValueLength() > 0) {
           Serial.print("Return Value length: ");
           Serial.println(atResponse.getValueLength(), DEC);
@@ -108,7 +121,10 @@ int sendATCommand(){
         }
       }
       else {
-        Serial.print("Error code: ");
+        Serial.print("Command [");
+        Serial.write(atResponse.getCommand()[0]);
+        Serial.write(atResponse.getCommand()[1]);
+        Serial.print("] was failed with error code: ");
         Serial.println(atResponse.getStatus(), HEX);
         err++;
       }
@@ -126,10 +142,9 @@ void debugPrint(Rx16IoSampleResponse sample){
   Serial.println(sample.getRemoteAddress16(), DEC);
   Serial.print("Data Length:");
   Serial.println(sample.getDataLength(), DEC);
-  Serial.print("Frame Data :");
-  
+  Serial.print("Frame Data : ");
   for (int i=0; i<sample.getDataLength(); i++){
-      Serial.write(sample.getData()[i]);
+      Serial.println(sample.getData()[i], HEX);
   }
   Serial.println();
   Serial.println("==============================");
@@ -140,31 +155,25 @@ void loop() {
   xbee.readPacket();
 
   if (xbee.getResponse().isAvailable()) {
-    
-    Serial.println("I got something.."); //Debug
-    
     if (xbee.getResponse().getApiId() == RX_16_RESPONSE) {
+      xbee.getResponse().getRx16IoSampleResponse(ioSample); //Fulfill the frame data
       
-      xbee.getResponse().getRx16IoSampleResponse(ioSample); //Get the frame data
-      debugPrint(ioSample); //for debug
-      getParam();
-      flashLed(statusLed, 3, 10);
-        
+      //Do somthing with received frame
+      flashLed(statusLed, 3, 10); // Flash LED
+      
       if (xbee.getResponse().getApiId() == RX_16_RESPONSE) {
-        
         xbee.getResponse().getRx16Response(rx16);
         //option = rx16.getOption();
         data = rx16.getData(0);
         Serial.print("Data captured by rx16.getData: ");
-        Serial.println(data,HEX);
+        Serial.println(data, HEX);
       }
       
       Serial.print("So, I will send some charactors to XBee having addr: ");
-      Serial.println(ioSample.getRemoteAddress16(),DEC);
-          
+      Serial.println(ioSample.getRemoteAddress16(), HEX);
+      
       if (millis() - start > 15000){
-        
-        pin5 = analogRead(5);
+        pin5 = analogRead(anaSense);
         payload[0] = pin5 >> 8 & 0xff;
         payload[1] = pin5 & 0xff;
         xbee.send(tx);
