@@ -1,20 +1,16 @@
-/*
-  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/**************************************
   Remote Sense Device using XBee
   
   Created 30 May 2015
   by hollyRock
-  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-*/
- 
+ **************************************/
 #include <XBee.h>
 #include <SoftwareSerial.h>
 
-/*
+/*******************************************************************
     XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
     XBee's DIN (RX) is connected to pin 3 (Arduino's Software TX)
-*/
-
+ *******************************************************************/
 SoftwareSerial altSerial(2, 3);
 XBee xbee = XBee();
 
@@ -23,26 +19,26 @@ uint8_t payload[] = {0, 0}; // allocate two bytes for to hold a 10-bit analog re
 //uint8_t arryCmd[] = {'M', 'Y'};
 uint8_t ID[] = {'I','D'}; //Personal Area Network ID ...OK
 uint8_t MY[] = {'M','Y'}; //16-bit Address           ...OK
-uint8_t DB[] = {'D','B'}; //Received Signal Strength ...NG
-uint8_t PP[] = {'P','P'}; //Peak Power               ...NG
-uint8_t BD[] = {'B','D'}; //Interface Data Rate      ...NG
-uint8_t VP[] = {'V','+'}; //Voltage Supply Monitoring
-uint8_t TP[] = {'T','P'}; //Module Temperature
+//uint8_t DB[] = {'D','B'}; //Received Signal Strength ...NG
+//uint8_t PP[] = {'P','P'}; //Peak Power               ...NG
+//uint8_t BD[] = {'B','D'}; //Interface Data Rate      ...NG
+//uint8_t VP[] = {'V','+'}; //Voltage Supply Monitoring...NG
+//uint8_t TP[] = {'T','P'}; //Module Temperature       ...NG
 uint8_t VR[] = {'V','R'}; //Firmware Version         ...OK
 uint8_t FR[] = {'F','R'}; //Software Reset           ...OK
 
 Tx16Request tx = Tx16Request(0x1234, payload, sizeof(payload)); // Coordinator Address: 0x1234
-TxStatusResponse txStatus = TxStatusResponse();
-
-Rx16IoSampleResponse ioSample = Rx16IoSampleResponse(); 
 Rx16Response rx16 = Rx16Response();
+
+TxStatusResponse txStatus = TxStatusResponse();
+Rx16IoSampleResponse ioSample = Rx16IoSampleResponse(); 
 
 AtCommandRequest atRequest = AtCommandRequest();
 AtCommandResponse atResponse = AtCommandResponse();
 
-/*
+/******************************
     Configuration Parameters
-*/
+ *******************************/
 unsigned long start = millis();
 int anaSense = 5;
 int pin5 = 0;
@@ -52,8 +48,8 @@ int serial_speed = 19200;
 //uint8_t option = 0;
 uint8_t data = 0;
 
+
 void setup() {
-  
   pinMode(statusLed, OUTPUT);
   pinMode(errorLed, OUTPUT);
   
@@ -63,8 +59,8 @@ void setup() {
   
   debugPrint(ioSample);       // Print frame content to serial monitor
   getParam();                 // Obtain self configration parameters
-
 }
+
 
 void flashLed(int pin, int times, int wait) {
     
@@ -76,29 +72,18 @@ void flashLed(int pin, int times, int wait) {
     }
 }
 
+
 void getParam(){
   atRequest.setCommand(ID);
   sendATCommand();
   atRequest.setCommand(MY);
   sendATCommand();
-//  atRequest.setCommand(DB);
-//  sendATCommand();
-//  atRequest.setCommand(PP);
-//  sendATCommand();
-//  atRequest.setCommand(BD);
-//  sendATCommand();
-//  atRequest.setCommand(VP);
-//  sendATCommand();
-//  atRequest.setCommand(TP);
-//  sendATCommand();
   atRequest.setCommand(VR);
   sendATCommand();
-//  atRequest.setCommand(FR);
-//  sendATCommand();
 }
 
-int sendATCommand(){
 
+int sendATCommand(){
   int err = 0;
   xbee.send(atRequest); //send the command
       
@@ -133,8 +118,8 @@ int sendATCommand(){
   return err;
 }
 
+
 void debugPrint(Rx16IoSampleResponse sample){
-  
   Serial.println("DEBUG==========");
   Serial.print("ID         :");
   Serial.println(sample.getRemoteAddress16(), HEX);
@@ -150,8 +135,8 @@ void debugPrint(Rx16IoSampleResponse sample){
   Serial.println("==============================");
 }
 
-void loop() {
 
+void loop() {
   xbee.readPacket();
 
   if (xbee.getResponse().isAvailable()) {
