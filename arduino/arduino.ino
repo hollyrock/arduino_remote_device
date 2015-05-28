@@ -41,7 +41,7 @@ AtCommandResponse atResponse = AtCommandResponse();
  *******************************/
 unsigned long start = millis();
 int anaSense = 5;
-int pin5 = 0;
+uint8_t Ana_val = 0;
 int statusLed = 11;
 int errorLed = 12;
 int serial_speed = 19200;
@@ -71,7 +71,6 @@ void flashLed(int pin, int times, int wait) {
       if (i + 1 < times) delay(wait);
     }
 }
-
 
 void getParam(){
   atRequest.setCommand(ID);
@@ -129,7 +128,7 @@ void debugPrint(Rx16IoSampleResponse sample){
   Serial.println(sample.getDataLength(), DEC);
   Serial.print("Frame Data : ");
   for (int i=0; i<sample.getDataLength(); i++){
-      Serial.println(sample.getData()[i], HEX);
+      Serial.print(sample.getData()[i], HEX);
   }
   Serial.println();
   Serial.println("==============================");
@@ -158,9 +157,11 @@ void loop() {
       Serial.println(ioSample.getRemoteAddress16(), HEX);
       
       if (millis() - start > 15000){
-        pin5 = analogRead(anaSense);
-        payload[0] = pin5 >> 8 & 0xff;
-        payload[1] = pin5 & 0xff;
+        Ana_val = analogRead(anaSense); //tempC = ((5*Ana_val)/1024)*100;
+        payload[0] = Ana_val >> 8 & 0xff;
+        payload[1] = Ana_val & 0xff;
+        Serial.print(payload[0]);
+        Serial.println(payload[1]);
         xbee.send(tx);
       }
 
