@@ -1,8 +1,7 @@
 /**************************************
   Remote Sense Device using XBee
   
-  Created 30 May 2015
-  by hollyRock
+  by hollyRock  30 May 2015
  **************************************/
 #include <XBee.h>
 #include <SoftwareSerial.h>
