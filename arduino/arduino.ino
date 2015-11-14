@@ -5,6 +5,10 @@
 
 #include <XBee.h>
 #include <SoftwareSerial.h>
+#include <DHT.h>
+
+#define DHTPIN 2
+#define DHTTYPE DHT11
 
 /*******************************************************************
     XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
@@ -12,6 +16,7 @@
  *******************************************************************/
 SoftwareSerial altSerial(2, 3);
 XBee xbee = XBee();
+DHT dht(DHTPIN,DHTTYPE);
 
 uint8_t payload[] = {0, 0}; // allocate two bytes for to hold a 10-bit analog reading
 
@@ -68,6 +73,41 @@ void getParam(){
   atRequest.setCommand(VR);
   sendATCommand();
 }
+
+// ***** Get temperature and Humidity from DHT
+int getEnvDataDHT(){
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  if (isnan(h) || isnan(t)) {
+    return -1;
+  }
+  float hi = dht.computeHeatIndex(t, h, false);
+  
+  Serial.print("Humidity: ");
+  Serial.println(h);
+  Serial.print("Temperature: ");
+  Serial.print(t);
+  Serial.println("*C");
+  Serial.print("Heat Index: ");
+  Serial.print(hi);
+  Serial.println("*C");
+  return 1;
+}
+
+// ***** Get temperature and Humidity from DHT
+int getEnvDataLM35(){
+      if (millis() - start > 15000){
+        Ana_val = analogRead(anaSense); //tempC = ((5*Ana_val)/1024)*100;
+        payload[0] = Ana_val >> 8 & 0xff;
+        payload[1] = Ana_val & 0xff;
+        Serial.print("Temp data(analog)");
+        Serial.print(payload[0]);
+        Serial.println(payload[1]);
+        xbee.send(tx);
+        return 1;
+      }
+}
+
 
 // ***** Use AT command to change xbee parameters
 int sendATCommand(){
@@ -148,15 +188,8 @@ void commandDescriptor(uint8_t command){
     case 3:
       break;
     case 33:
-      if (millis() - start > 15000){
-        Ana_val = analogRead(anaSense); //tempC = ((5*Ana_val)/1024)*100;
-        payload[0] = Ana_val >> 8 & 0xff;
-        payload[1] = Ana_val & 0xff;
-        Serial.print("Temp data(analog)");
-        Serial.print(payload[0]);
-        Serial.println(payload[1]);
-        xbee.send(tx);
-      }
+      // getEnvDataLM35();
+      getEnvDataDHT();
       break;
     case 129:
       Serial.println ("Hello!");
@@ -190,6 +223,8 @@ void setup() {
   Serial.begin(serial_speed);    // Open serial port for debug console
   altSerial.begin(serial_speed); // Open serial port for Xbee
   xbee.setSerial(altSerial);
+
+  dht.begin();
   
   getParam();                     // Obtain self configration parameters
 }
