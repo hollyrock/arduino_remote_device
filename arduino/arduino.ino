@@ -3,58 +3,55 @@
   by hollyRock  30 May 2015
  **************************************/
 
-#include <XBee.h>
 #include <SoftwareSerial.h>
+#include <XBee.h>
 #include <DHT.h>
 
 #define DHTPIN 2
 #define DHTTYPE DHT11
-
-/*******************************************************************
-    XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
-    XBee's DIN (RX) is connected to pin 3 (Arduino's Software TX)
- *******************************************************************/
-SoftwareSerial altSerial(2, 3);
-XBee xbee = XBee();
 DHT dht(DHTPIN,DHTTYPE);
 
+// ********************************************************
+//    XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
+//    XBee's DIN (RX) is connected to pin 3 (Arduino's Software TX)
+// ********************************************************
+SoftwareSerial altSerial(2, 3);
+XBee xbee = XBee();
 uint8_t payload[] = {0, 0}; // allocate two bytes for to hold a 10-bit analog reading
-
-// AT Command for XBee on Arduino
-uint8_t ID[] = {'I','D'}; //Personal Area Network ID ...OK
-uint8_t MY[] = {'M','Y'}; //16-bit Address           ...OK
-//uint8_t DB[] = {'D','B'}; //Received Signal Strength ...NG
-//uint8_t PP[] = {'P','P'}; //Peak Power               ...NG
-//uint8_t BD[] = {'B','D'}; //Interface Data Rate      ...NG
-//uint8_t VP[] = {'V','+'}; //Voltage Supply Monitoring...NG
-//uint8_t TP[] = {'T','P'}; //Module Temperature       ...NG
-uint8_t VR[] = {'V','R'}; //Firmware Version         ...OK
-uint8_t FR[] = {'F','R'}; //Software Reset           ...OK
 
 Tx16Request tx = Tx16Request(0x1234, payload, sizeof(payload)); // Coordinator Address: 0x1234
 Rx16Response rx16 = Rx16Response();
+
 TxStatusResponse txStatus = TxStatusResponse();
 Rx16IoSampleResponse ioSample = Rx16IoSampleResponse(); 
-
 AtCommandRequest atRequest = AtCommandRequest();
 AtCommandResponse atResponse = AtCommandResponse();
 
-/******************************
-    Configuration Parameters
- *******************************/
+  // AT Command for XBee on Arduino
+  uint8_t ID[] = {'I','D'}; //Personal Area Network ID ...OK
+  uint8_t MY[] = {'M','Y'}; //16-bit Address           ...OK
+  uint8_t VR[] = {'V','R'}; //Firmware Version         ...OK
+  uint8_t FR[] = {'F','R'}; //Software Reset           ...OK
+  //uint8_t DB[] = {'D','B'}; //Received Signal Strength ...NG
+  //uint8_t PP[] = {'P','P'}; //Peak Power               ...NG
+  //uint8_t BD[] = {'B','D'}; //Interface Data Rate      ...NG
+  //uint8_t VP[] = {'V','+'}; //Voltage Supply Monitoring...NG
+  //uint8_t TP[] = {'T','P'}; //Module Temperature       ...NG
+
+// ********************************************************
+//    Configuration Parameters
+// ********************************************************
 unsigned long start = millis();
-int anaSense = 5;
-uint8_t Ana_val = 0;
+
 int statusLed = 11; //Pin# for debug LED
 int errorLed = 12; //Pin# for debug LED
 int serial_speed = 19200;
-//uint8_t option = 0;
 uint8_t data = 0;
 
-/******************************
-    Functions Parameters
- *******************************/
-// ***** Blink LED
+// ********************************************************
+//  Function    : flashLed
+//   Description : Blink LED
+// ********************************************************
 void flashLed(int pin, int times, int wait) {
     for (int i = 0; i < times; i++) {
       digitalWrite(pin, HIGH);
@@ -64,8 +61,12 @@ void flashLed(int pin, int times, int wait) {
     }
 }
 
-// ***** Get current parameters on xbee
+// ********************************************************
+//  Function    : getParam
+//  Desc.       : Get curent configuration from XBee
+// ********************************************************
 void getParam(){
+ 
   atRequest.setCommand(ID);
   sendATCommand();
   atRequest.setCommand(MY);
@@ -74,42 +75,42 @@ void getParam(){
   sendATCommand();
 }
 
-// ***** Get temperature and Humidity from DHT
+// ********************************************************
+//  Function    : getEnvDataDHT
+//  Desc.       : Get temperature and Humidity from DHT Device
+// ********************************************************
 int getEnvDataDHT(){
   float h = dht.readHumidity();
   float t = dht.readTemperature();
+
   if (isnan(h) || isnan(t)) {
     return -1;
   }
+  
   float hi = dht.computeHeatIndex(t, h, false);
+
+  //payload[0] = t >> 8 & 0xff;
+  //payload[1] = t & 0xff;
+  //xbee.send(tx);
   
   Serial.print("Humidity: ");
   Serial.println(h);
   Serial.print("Temperature: ");
   Serial.print(t);
   Serial.println("*C");
+  Serial.print("Debug: ");
+  Serial.print(payload[0]);
+  Serial.print(payload[1]);
   Serial.print("Heat Index: ");
   Serial.print(hi);
   Serial.println("*C");
   return 1;
 }
 
-// ***** Get temperature and Humidity from DHT
-int getEnvDataLM35(){
-      if (millis() - start > 15000){
-        Ana_val = analogRead(anaSense); //tempC = ((5*Ana_val)/1024)*100;
-        payload[0] = Ana_val >> 8 & 0xff;
-        payload[1] = Ana_val & 0xff;
-        Serial.print("Temp data(analog)");
-        Serial.print(payload[0]);
-        Serial.println(payload[1]);
-        xbee.send(tx);
-        return 1;
-      }
-}
-
-
-// ***** Use AT command to change xbee parameters
+// ********************************************************
+//  Function    : sendATCommand
+//  Desc.       : Send AT command to XBee for configuration
+// ********************************************************
 int sendATCommand(){
   int err = 0;
   xbee.send(atRequest); //send the command
@@ -147,7 +148,10 @@ int sendATCommand(){
   return err;
 }
 
-// ***** Print frame content to serial monitor
+// ********************************************************
+//  Function    : debugPrint
+//  Desc.       : Print Frame content into Serial Monitor
+// ********************************************************
 void debugPrint(Rx16IoSampleResponse sample){
   Serial.println("DEBUG========================");
   Serial.print("ID         :");
@@ -164,8 +168,11 @@ void debugPrint(Rx16IoSampleResponse sample){
   Serial.println("==============================");
 }
 
-// ***** Control Command
-void commandDescriptor(uint8_t command){
+// ********************************************************
+//  Function    : cmdDescriptor
+//  Desc.       : Command Descriptor for Raspberry PI 
+// ********************************************************
+void cmdDescriptor(uint8_t command){
 /*
  * Arduino is controlled by applying command:
  * 0x00 (0)  : No Action
@@ -188,7 +195,6 @@ void commandDescriptor(uint8_t command){
     case 3:
       break;
     case 33:
-      // getEnvDataLM35();
       getEnvDataDHT();
       break;
     case 129:
@@ -213,9 +219,9 @@ void commandDescriptor(uint8_t command){
     }  
 }
 
-/******************************
-    Setup
- *******************************/
+// ********************************************************
+//  Function    : setup
+// ********************************************************
 void setup() {
   pinMode(statusLed, OUTPUT);
   pinMode(errorLed, OUTPUT);
@@ -225,15 +231,16 @@ void setup() {
   xbee.setSerial(altSerial);
 
   dht.begin();
-  
   getParam();                     // Obtain self configration parameters
 }
 
-/******************************
-    Loop
- *******************************/
+// ********************************************************
+//  Function    : loop
+// ********************************************************
 void loop() {
+  
   xbee.readPacket();
+  
   if (xbee.getResponse().isAvailable()) {
     if (xbee.getResponse().getApiId() == RX_16_RESPONSE) {
       xbee.getResponse().getRx16IoSampleResponse(ioSample); //Fulfill the frame data
@@ -242,7 +249,7 @@ void loop() {
         xbee.getResponse().getRx16Response(rx16);
         //option = rx16.getOption();
         data = rx16.getData(0);
-        commandDescriptor(data);
+        cmdDescriptor(data);
       }
       
       // ***** End procedure
@@ -269,4 +276,6 @@ void loop() {
     }
     delay(1000);
   }
+  getEnvDataDHT();
+  delay(1000);
 }
