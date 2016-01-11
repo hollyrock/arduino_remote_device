@@ -4,7 +4,7 @@
 
 #include <SoftwareSerial.h>
 #include <XBee.h>
-#include <DHT.h>
+#include "DHT.h"
 
 #define DHTPIN 2
 #define DHTTYPE DHT11
@@ -39,7 +39,7 @@ DHT dht(DHTPIN,DHTTYPE);
 //    XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
 //    XBee's DIN (RX) is connected to pin 3 (Arduino's Software TX)
 XBee xbee = XBee();
-Tx16Request tx = Tx16Request(0x1234, payload, sizeof(payload)); // Coordinator Address: 0x1234
+Tx16Request tx = Tx16Request(0x1234, &payload[0], PAYLOAD_SIZE); // Pi Address: 0x1234
 Rx16Response rx16 = Rx16Response();
 
 TxStatusResponse txStatus = TxStatusResponse();
@@ -59,29 +59,30 @@ void flashLed(int pin, int times, int wait) {
 
 // ************* Get temperature and Humidity from DHT Device
 float getEnvDataDHT(int mode){
-  float ret;
+  delay(2000);
+  float ret = 0.0;
   // mode 1 = Temperature, 2 = Humidity, 3 = HeatIndex
   if(mode == 3) {
     float h = dht.readHumidity();
     float t = dht.readTemperature();
-    float ret = dht.computeHeatIndex(t, h, false);
+    ret = dht.computeHeatIndex(t, h, false);
   }else if(mode == 2){
-    float ret = dht.readHumidity();
+    ret = dht.readHumidity();
   }else{
-    float ret = dht.readTemperature();
-  }
-  
-  if (isnan(ret)) {
-    return -1;
+    ret = dht.readTemperature();
   }
 
-  return ret;
-
-  // debug
-  Serial.print("mode: ");
-  Serial.println(mode);
-  Serial.print("Returne: ");
-  Serial.print(ret);
+  if (isnan(ret)){
+    Serial.println("Failed to read from DHT sensor!");
+    return -9;
+  } else {
+    // debug
+    Serial.print("mode: ");
+    Serial.println(mode);
+    Serial.print("Returne: ");
+    Serial.println(ret);
+    return ret;
+  }
 }
 
 //  ************* Get curent configuration from XBee
@@ -149,33 +150,6 @@ void debugPrint(Rx16IoSampleResponse sample){
   Serial.println("==============================");
 }
 
-// *************** Command Descriptor for Raspberry PI 
-void cmdDescriptor(uint8_t command){
-  switch (*data) {
-    case 'DBG':
-      debugPrint(ioSample);
-      break;
-    case 'TMP':
-      //getEnvDataDHT();
-      break;
-    case 'HELO':
-      Serial.println ("Hello!");
-      break;
-    case 'BYE':
-      Serial.println ("Bye now");
-      break;
-    case 'sLED':
-      flashLed(statusLed, 3, 10);
-      break;
-    case 'RST':
-      atRequest.setCommand(FR);
-      sendATCommand();
-      break;
-    default:
-      Serial.println ("[Cmd Descriptor] Invalid command.*****");
-    }  
-}
-
 void setup() {
   pinMode(statusLed, OUTPUT);
   pinMode(errorLed, OUTPUT);
@@ -204,21 +178,30 @@ void loop() {
         Serial.println("Received");
         Serial.write(data, data_len);
         Serial.println("");
-        if(strcmp((char*)data, "temp") == 0){
-          //cmdDescriptor(data);
-          Serial.println("Send temperature");
+
+        if(strcmp((char*)data, "temp") == 0){  // Send Temperature Data
+          Serial.println("Send Temperature");
           float temp = getEnvDataDHT(1); // Mode 1 = temperature
           Serial.print("Temp: ");
-          Serial.print(temp, sizeof(float));
+          Serial.println(temp, sizeof(float));
           float_sensor_result res;
           res.float_variable = temp;
           memcpy(&payload, &res.bytes_array[0], PAYLOAD_SIZE);
-
           xbee.send(tx);
-          flashLed(statusLed, 5, 50);
-        }
-      }
-      else{
+          flashLed(statusLed, 1, 50);
+          
+        } else if (strcmp((char*)data, "hmdy") == 0){  // Send Humidity Data
+          Serial.println("Send Humidity");
+          float hmdy = getEnvDataDHT(2); // Mode 1 = temperature
+          Serial.print("Humidity : ");
+          Serial.println(hmdy, sizeof(float));
+          float_sensor_result res;
+          res.float_variable = hmdy;
+          memcpy(&payload, &res.bytes_array[0], PAYLOAD_SIZE);
+          xbee.send(tx);
+          flashLed(statusLed, 2, 50);
+        } 
+      }else{
         Serial.println("Failed to get data");
         flashLed(errorLed, 3, 500);
       }
